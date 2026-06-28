@@ -8,4 +8,18 @@ alwaysApply: true
 - **Wi-Fi IP (this machine):** `192.168.86.23` — use `http://192.168.86.23:8501` from the phone.
   - Note: the Ethernet adapter is `192.168.0.x`; the phone must be on the `192.168.86.x` Wi-Fi.
 - **Launch:** run `./launch.ps1` (binds to `0.0.0.0` so phones on the same Wi-Fi can connect).
-- Requires `GEMINI_API_KEY` in `.env` for recipe generation.
+- Requires `ZEN_API_KEY` or `GEMINI_API_KEY` in `.env` for recipe generation.
+- Requires `SUPABASE_URL` and `SUPABASE_KEY` in `.env` for persistent database.
+
+# Deployment
+
+- **Streamlit Cloud:** https://dinner-suggestion.streamlit.app (auto-deploys from `main` branch)
+- **PWA (iPhone install):** https://tianxos.github.io/dinner-suggestion-pwa/
+- Database: Supabase (PostgreSQL) — tables: `recipes`, `saved_dishes`, `preferences`
+- Secrets managed via Streamlit Cloud UI → App Settings → Secrets
+- PWA wrapper repo: `tianxos/dinner-suggestion-pwa`
+
+# Notes
+
+- Ingredients are stored in Chinese; fuzzy search maps English to Chinese via `_ING_MAP` in `db.py`
+- The `openai` package is needed for the weekly meal planner (Zen API)
