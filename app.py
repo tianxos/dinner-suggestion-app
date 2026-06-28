@@ -73,8 +73,8 @@ st.markdown(
           color: #1A0F0A; font-size: 1.2rem !important; line-height: 1.6; font-weight: 500;
       }
       div.stButton > button {
-          width: 100%; padding: 1rem; font-size: 1.3rem !important;
-          font-weight: 700; border-radius: 14px; border: none;
+          width: 100%; padding: 0.5rem 1rem; font-size: 1.1rem !important;
+          font-weight: 700; border-radius: 10px; border: none;
           background-color: #E85D3A; color: white;
           box-shadow: 0 2px 10px rgba(232,93,58,0.3);
       }
@@ -100,6 +100,9 @@ st.markdown(
       .match-high { background: #D4EDDA; color: #155724; }
       .match-med { background: #FFF3CD; color: #856404; }
       .match-low { background: #F8D7DA; color: #721C24; }
+      [data-testid="stHorizontalBlock"] > div { padding-left: 0.3rem !important; padding-right: 0.3rem !important; }
+      [data-testid="stHorizontalBlock"] .stButton { margin-bottom: 0 !important; }
+      [data-testid="stHorizontalBlock"] .stButton button { padding: 0.4rem 0.8rem !important; font-size: 0.95rem !important; }
       /* Dialog / modal popup */
       [data-testid="stDialog"] { background-color: #FFF8F0 !important; color: #1A0F0A !important; }
       [data-testid="stDialog"] div, [data-testid="stDialog"] p, [data-testid="stDialog"] li,
@@ -679,24 +682,19 @@ with tab_my_dishes:
 
         for dish in filtered:
             with st.container():
-                # Title row with rating
-                rc1, rc2, rc3 = st.columns([0.6, 0.2, 0.2])
+                # Title + rating + view on one row
+                rc1, rc2, rc3 = st.columns([0.5, 0.25, 0.25])
                 with rc1:
                     st.markdown(f"**{dish['name']}**")
                     if dish.get("notes"):
                         st.caption(dish["notes"])
-                    # Dietary tags
                     tags = dish.get("dietary_tags") or []
                     if tags:
-                        tag_str = " ".join(f"`{t}`" for t in tags)
-                        st.caption(tag_str)
+                        st.caption(" ".join(f"`{t}`" for t in tags))
                 with rc2:
-                    # Rating buttons
                     current_rating = dish.get("rating") or 0
-                    rating_sym = "\u2764\ufe0f" if current_rating == 1 else ("\U0001f610" if current_rating == 0 else "\U0001f61e")
                     rating_label = L("rating_loved") if current_rating == 1 else (L("rating_none") if current_rating == 0 else L("rating_bad"))
-                    if st.button(f"{rating_label}", key=f"dish_rate_{dish['id']}"):
-                        # Cycle: 0 -> 1 -> -1 -> 0
+                    if st.button(rating_label, key=f"dish_rate_{dish['id']}"):
                         new_rating = 1 if current_rating == 0 else (-1 if current_rating == 1 else 0)
                         set_dish_rating(dish["id"], new_rating)
                         st.rerun()
@@ -705,9 +703,9 @@ with tab_my_dishes:
                         st.session_state["view_dish"] = dish["id"]
                         st.rerun()
 
-                # Action buttons
-                ac1, ac2, ac3 = st.columns(3)
-                with ac1:
+                # Cook + delete on one row
+                bc1, bc2 = st.columns(2)
+                with bc1:
                     if st.button(L("pantry_cooking_mode"), key=f"dish_cook_{dish['id']}"):
                         st.session_state["cooking_recipe"] = type("R", (), {
                             "name": dish["name"],
@@ -716,12 +714,12 @@ with tab_my_dishes:
                         })()
                         st.session_state["cooking_step"] = 0
                         st.rerun()
-                with ac2:
+                with bc2:
                     if st.button(L("my_dishes_delete"), key=f"dish_del_{dish['id']}"):
                         delete_dish(dish["id"])
                         st.rerun()
 
-                st.divider()
+                st.caption("")
 
 # ── Recipe Detail Dialog ─────────────────────────────────────────────────────
 @st.dialog(L("recipe_detail"), width="large")
