@@ -2,63 +2,32 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 from datetime import datetime
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dinner_app.db")
+from supabase import create_client, Client
+
+_supabase: Client | None = None
 
 
-def _conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+def _get_client() -> Client:
+    global _supabase
+    if _supabase is None:
+        url = os.environ.get("SUPABASE_URL") or ""
+        key = os.environ.get("SUPABASE_KEY") or ""
+        if not url or not key:
+            raise RuntimeError(
+                "Set SUPABASE_URL and SUPABASE_KEY in Streamlit secrets "
+                "(or .env for local dev)."
+            )
+        _supabase = create_client(url, key)
+    return _supabase
 
 
 def init_db() -> None:
-    conn = _conn()
-    conn.executescript("""
-        CREATE TABLE IF NOT EXISTS recipes (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            why         TEXT,
-            steps       TEXT,
-            ingredients_used TEXT,
-            recipe_ingredients TEXT,
-            time_limit  TEXT,
-            diet        TEXT,
-            is_favorite INTEGER DEFAULT 0,
-            rating      INTEGER DEFAULT 0,
-            nutrition   TEXT,
-            language    TEXT DEFAULT 'en',
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS saved_dishes (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            name        TEXT NOT NULL,
-            ingredients TEXT,
-            steps       TEXT,
-            notes       TEXT DEFAULT '',
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-        CREATE TABLE IF NOT EXISTS preferences (
-            key   TEXT PRIMARY KEY,
-            value TEXT
-        );
-    """)
-    conn.commit()
-    # Add columns for schema upgrades
-    for col, typ, table in [
-        ("recipe_ingredients", "TEXT", "recipes"),
-        ("dietary_tags", "TEXT", "saved_dishes"),
-        ("rating", "INTEGER DEFAULT 0", "saved_dishes"),
-    ]:
-        try:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
-            conn.commit()
-        except sqlite3.OperationalError:
-            pass
-    conn.close()
+    client = _get_client()
+    # Tables are created in Supabase SQL Editor; this is a no-op placeholder
+    # so the rest of the app can still call init_db() without error.
+    pass
 
 
 # ── Recipes (history) ───────────────────────────────────────────────────────
@@ -68,98 +37,83 @@ def save_recipe(name: str, why: str, steps: list[str],
                 nutrition: str | None = None,
                 language: str = "en",
                 recipe_ingredients: list[str] | None = None) -> int:
-    conn = _conn()
-    cur = conn.execute(
-        "INSERT INTO recipes (name, why, steps, ingredients_used, recipe_ingredients, time_limit, diet, nutrition, language) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        (name, why, json.dumps(steps), ingredients_used,
-         json.dumps(recipe_ingredients) if recipe_ingredients else None,
-         time_limit, diet, nutrition, language),
-    )
-    conn.commit()
-    rid = cur.lastrowid
-    conn.close()
-    return rid
+    client = _get_client()
+    data = {
+        "name": name,
+        "why": why,
+        "steps": json.dumps(steps),
+        "ingredients_used": ingredients_used,
+        "recipe_ingredients": json.dumps(recipe_ingredients) if recipe_ingredients else None,
+        "time_limit": time_limit,
+        "diet": diet,
+        "nutrition": nutrition,
+        "language": language,
+    }
+    result = client.table("recipes").insert(data).execute()
+    return result.data[0]["id"]
 
 
 def get_history(limit: int = 50, favorites_only: bool = False) -> list[dict]:
-    conn = _conn()
+    client = _get_client()
+    query = client.table("recipes").select("*").order("created_at", desc=True).limit(limit)
     if favorites_only:
-        rows = conn.execute(
-            "SELECT * FROM recipes WHERE is_favorite = 1 ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM recipes ORDER BY created_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-    conn.close()
+        query = query.eq("is_favorite", True)
+    rows = query.execute().data
     result = []
     for r in rows:
-        d = dict(r)
-        d["steps"] = json.loads(d["steps"]) if isinstance(d["steps"], str) else d["steps"]
-        result.append(d)
+        r["steps"] = json.loads(r["steps"]) if isinstance(r["steps"], str) else r["steps"]
+        result.append(r)
     return result
 
 
 def toggle_favorite(recipe_id: int) -> None:
-    conn = _conn()
-    conn.execute(
-        "UPDATE recipes SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END WHERE id = ?",
-        (recipe_id,),
-    )
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    row = client.table("recipes").select("is_favorite").eq("id", recipe_id).execute().data
+    if row:
+        new_val = 0 if row[0]["is_favorite"] else 1
+        client.table("recipes").update({"is_favorite": new_val}).eq("id", recipe_id).execute()
 
 
 def set_rating(recipe_id: int, rating: int) -> None:
-    conn = _conn()
-    conn.execute("UPDATE recipes SET rating = ? WHERE id = ?", (rating, recipe_id))
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("recipes").update({"rating": rating}).eq("id", recipe_id).execute()
 
 
 def delete_recipe(recipe_id: int) -> None:
-    conn = _conn()
-    conn.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,))
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("recipes").delete().eq("id", recipe_id).execute()
 
 
 def clear_history() -> None:
-    conn = _conn()
-    conn.execute("DELETE FROM recipes")
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("recipes").delete().neq("id", 0).execute()
 
 
 # ── Saved dishes ────────────────────────────────────────────────────────────
 
 def save_dish(name: str, ingredients: list[str], steps: list[str],
               notes: str = "", dietary_tags: list[str] | None = None) -> None:
-    conn = _conn()
-    conn.execute(
-        "INSERT INTO saved_dishes (name, ingredients, steps, notes, dietary_tags) VALUES (?, ?, ?, ?, ?)",
-        (name, json.dumps(ingredients), json.dumps(steps), notes,
-         json.dumps(dietary_tags) if dietary_tags else None),
-    )
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    data = {
+        "name": name,
+        "ingredients": json.dumps(ingredients),
+        "steps": json.dumps(steps),
+        "notes": notes,
+        "dietary_tags": json.dumps(dietary_tags) if dietary_tags else None,
+    }
+    client.table("saved_dishes").insert(data).execute()
 
 
 def get_saved_dishes() -> list[dict]:
-    conn = _conn()
-    rows = conn.execute("SELECT * FROM saved_dishes ORDER BY created_at DESC").fetchall()
-    conn.close()
+    client = _get_client()
+    rows = client.table("saved_dishes").select("*").order("created_at", desc=True).execute().data
     return [_parse_dish(r) for r in rows]
 
 
 def get_dish_by_id(dish_id: int) -> dict | None:
-    conn = _conn()
-    row = conn.execute("SELECT * FROM saved_dishes WHERE id = ?", (dish_id,)).fetchone()
-    conn.close()
-    return _parse_dish(row) if row else None
+    client = _get_client()
+    row = client.table("saved_dishes").select("*").eq("id", dish_id).execute().data
+    return _parse_dish(row[0]) if row else None
 
 
 def search_dishes_by_ingredients(user_ings: list[str]) -> list[tuple[dict, int]]:
@@ -177,17 +131,13 @@ def search_dishes_by_ingredients(user_ings: list[str]) -> list[tuple[dict, int]]
 
 
 def set_dish_rating(dish_id: int, rating: int) -> None:
-    conn = _conn()
-    conn.execute("UPDATE saved_dishes SET rating = ? WHERE id = ?", (rating, dish_id))
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("saved_dishes").update({"rating": rating}).eq("id", dish_id).execute()
 
 
 def delete_dish(dish_id: int) -> None:
-    conn = _conn()
-    conn.execute("DELETE FROM saved_dishes WHERE id = ?", (dish_id,))
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("saved_dishes").delete().eq("id", dish_id).execute()
 
 
 def _parse_dish(row) -> dict:
@@ -202,26 +152,18 @@ def _parse_dish(row) -> dict:
 # ── Preferences ─────────────────────────────────────────────────────────────
 
 def get_pref(key: str, default: str | None = None) -> str | None:
-    conn = _conn()
-    row = conn.execute("SELECT value FROM preferences WHERE key = ?", (key,)).fetchone()
-    conn.close()
-    return row["value"] if row else default
+    client = _get_client()
+    row = client.table("preferences").select("value").eq("key", key).execute().data
+    return row[0]["value"] if row else default
 
 
 def set_pref(key: str, value: str) -> None:
-    conn = _conn()
-    conn.execute("INSERT OR REPLACE INTO preferences (key, value) VALUES (?, ?)", (key, value))
-    conn.commit()
-    conn.close()
+    client = _get_client()
+    client.table("preferences").upsert({"key": key, "value": value}).execute()
 
 
 def get_taste_profile() -> tuple[list[dict], list[dict]]:
-    conn = _conn()
-    liked = conn.execute(
-        "SELECT name, why FROM recipes WHERE rating = 1 ORDER BY created_at DESC LIMIT 5"
-    ).fetchall()
-    disliked = conn.execute(
-        "SELECT name FROM recipes WHERE rating = -1 ORDER BY created_at DESC LIMIT 5"
-    ).fetchall()
-    conn.close()
-    return [dict(r) for r in liked], [dict(r) for r in disliked]
+    client = _get_client()
+    liked = client.table("recipes").select("name, why").eq("rating", 1).order("created_at", desc=True).limit(5).execute().data
+    disliked = client.table("recipes").select("name").eq("rating", -1).order("created_at", desc=True).limit(5).execute().data
+    return liked, disliked
