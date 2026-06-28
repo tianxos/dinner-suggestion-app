@@ -1,0 +1,11 @@
+---
+description: Local launch info for the dinner-suggestion-app (Wi-Fi IP + how to run)
+alwaysApply: true
+---
+
+# Dinner App — Launch Notes
+
+- **Wi-Fi IP (this machine):** `192.168.86.23` — use `http://192.168.86.23:8501` from the phone.
+  - Note: the Ethernet adapter is `192.168.0.x`; the phone must be on the `192.168.86.x` Wi-Fi.
+- **Launch:** run `./launch.ps1` (binds to `0.0.0.0` so phones on the same Wi-Fi can connect).
+- Requires `GEMINI_API_KEY` in `.env` for recipe generation.
