@@ -13,9 +13,11 @@ _supabase: Client | None = None
 def _get_client() -> Client:
     global _supabase
     if _supabase is None:
+        url = ""
+        key = ""
         try:
-            url = st.secrets.get("SUPABASE_URL", "")
-            key = st.secrets.get("SUPABASE_KEY", "")
+            url = st.secrets["SUPABASE_URL"]
+            key = st.secrets["SUPABASE_KEY"]
         except Exception:
             url = os.environ.get("SUPABASE_URL", "")
             key = os.environ.get("SUPABASE_KEY", "")
