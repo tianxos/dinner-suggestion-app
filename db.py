@@ -124,14 +124,49 @@ def get_dish_by_id(dish_id: int) -> dict | None:
     return _parse_dish(row[0]) if row else None
 
 
+_ING_MAP = {
+    "pork belly": "五花肉", "pork": "猪肉", "chicken": "鸡", "beef": "牛肉",
+    "lamb": "羊肉", "fish": "鱼", "shrimp": "虾", "tofu": "豆腐",
+    "egg": "鸡蛋", "potato": "土豆", "tomato": "西红柿", "onion": "洋葱",
+    "garlic": "大蒜", "ginger": "姜", "green pepper": "青椒", "chili": "辣椒",
+    "cabbage": "白菜", "carrot": "胡萝卜", "mushroom": "蘑菇", "eggplant": "茄子",
+    "celery": "芹菜", "leek": "大葱", "scallion": "葱", "ginger": "姜",
+    "soy sauce": "酱油", "vinegar": "醋", "sugar": "糖", "salt": "盐",
+    "pepper": "胡椒", "oil": "油", "rice": "米", "noodle": "面条",
+    "dumpling": "饺子", "bread": "馒头", "sweet potato": "红薯",
+    "liver": "肝", "intestine": "肠", "bone": "骨", "rib": "排骨",
+    "sausage": "香肠", "ham": "火腿", "bean curd": "豆腐",
+    "peanut": "花生", "sesame": "芝麻", "cilantro": "香菜",
+    "parsley": "香菜", "green onion": "葱", "ginger": "姜",
+    "star anise": "八角", "cinnamon": "桂皮", "bay leaf": "香叶",
+    "corn": "玉米", "peas": "豌豆", "bean sprout": "豆芽",
+    "seaweed": "海带", "kelp": "海带", "wood ear": "木耳",
+    "mung bean": "绿豆", "red bean": "红豆", "soybean": "黄豆",
+    "milk": "牛奶", "cream": "奶油", "butter": "黄油",
+    "flour": "面粉", "starch": "淀粉", "bread crumb": "面包糠",
+}
+
+
+def _expand_ings(words: list[str]) -> list[str]:
+    """Expand English words to include their Chinese equivalents."""
+    out = []
+    for w in words:
+        wl = w.strip().lower()
+        out.append(wl)
+        if wl in _ING_MAP:
+            out.append(_ING_MAP[wl])
+    return out
+
+
 def search_dishes_by_ingredients(user_ings: list[str]) -> list[tuple[dict, int]]:
     """Return dishes sorted by how many of the user's ingredients they match."""
+    expanded = _expand_ings(user_ings)
     dishes = get_saved_dishes()
     scored = []
     for d in dishes:
         dish_ings = [i.lower() for i in d.get("ingredients", [])]
-        matches = sum(1 for u in user_ings
-                      if any(u.lower() in di or di in u.lower() for di in dish_ings))
+        matches = sum(1 for u in expanded
+                      if any(u in di or di in u for di in dish_ings))
         if matches > 0:
             scored.append((d, matches))
     scored.sort(key=lambda x: -x[1])
