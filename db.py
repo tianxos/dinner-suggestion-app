@@ -4,6 +4,7 @@ import json
 import os
 from datetime import datetime
 
+import streamlit as st
 from supabase import create_client, Client
 
 _supabase: Client | None = None
@@ -12,8 +13,12 @@ _supabase: Client | None = None
 def _get_client() -> Client:
     global _supabase
     if _supabase is None:
-        url = os.environ.get("SUPABASE_URL") or ""
-        key = os.environ.get("SUPABASE_KEY") or ""
+        try:
+            url = st.secrets.get("SUPABASE_URL", "")
+            key = st.secrets.get("SUPABASE_KEY", "")
+        except Exception:
+            url = os.environ.get("SUPABASE_URL", "")
+            key = os.environ.get("SUPABASE_KEY", "")
         if not url or not key:
             raise RuntimeError(
                 "Set SUPABASE_URL and SUPABASE_KEY in Streamlit secrets "
