@@ -21,11 +21,13 @@ def _get_client() -> Client:
         except Exception:
             url = os.environ.get("SUPABASE_URL", "")
             key = os.environ.get("SUPABASE_KEY", "")
+        url = url.strip().rstrip("/")
         if not url or not key:
             raise RuntimeError(
                 "Set SUPABASE_URL and SUPABASE_KEY in Streamlit secrets "
                 "(or .env for local dev)."
             )
+        print(f"[DEBUG] Supabase URL: {url}")
         _supabase = create_client(url, key)
     return _supabase
 
