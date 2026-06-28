@@ -680,7 +680,7 @@ with tab_my_dishes:
         for dish in filtered:
             with st.container():
                 # Title row with rating
-                rc1, rc2, rc3 = st.columns([0.7, 0.2, 0.1])
+                rc1, rc2, rc3 = st.columns([0.6, 0.2, 0.2])
                 with rc1:
                     st.markdown(f"**{dish['name']}**")
                     if dish.get("notes"):
