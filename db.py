@@ -27,7 +27,6 @@ def _get_client() -> Client:
                 "Set SUPABASE_URL and SUPABASE_KEY in Streamlit secrets "
                 "(or .env for local dev)."
             )
-        print(f"[DEBUG] Supabase URL: {url}")
         _supabase = create_client(url, key)
     return _supabase
 
